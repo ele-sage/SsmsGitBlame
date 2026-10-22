@@ -6,12 +6,91 @@
   <Include href="KnownImageIds.vsct"/>
   <Include href="VSGlobals.vsct"/>
 
-  <Commands package="SsmsGitBlame">
-  </Commands>
+	<Commands package="SsmsGitBlame">
+		<Groups>
+			<Group guid="SsmsGitBlame" id="EditorContextMenuGroup" priority="0x0100">
+				<Parent guid="guidSqlQueryEditorContextMenu" id="idSqlQueryEditorContextMenu"/>
+			</Group>
+
+			<Group guid="SsmsGitBlame" id="GitSubMenuGroup" priority="0x0100">
+				<Parent guid="SsmsGitBlame" id="GitSubMenu"/>
+			</Group>
+		</Groups>
+
+		<Menus>
+			<Menu guid="SsmsGitBlame" id="GitSubMenu" priority="0x0100" type="Menu">
+				<Parent guid="SsmsGitBlame" id="EditorContextMenuGroup"/>
+				<Strings>
+					<ButtonText>Git</ButtonText>
+				</Strings>
+			</Menu>
+		</Menus>
+
+		<Buttons>
+			<!-- 1. "Annotate with Git Blame" toggle button -->
+			<Button guid="SsmsGitBlame" id="ToggleBlameCommand" priority="0x0050" type="Button">
+				<Parent guid="SsmsGitBlame" id="GitSubMenuGroup" />
+				<Strings>
+					<ButtonText>A&amp;nnotate with Git Blame</ButtonText>
+					<LocCanonicalName>.Git.AnnotateWithGitBlame</LocCanonicalName>
+				</Strings>
+			</Button>
+
+			<!-- 2. "Show History" button -->
+			<Button guid="SsmsGitBlame" id="ShowHistoryCommand" priority="0x0100" type="Button">
+				<Parent guid="SsmsGitBlame" id="GitSubMenuGroup" />
+				<Icon guid="ImageCatalogGuid" id="History" />
+				<CommandFlag>IconIsMoniker</CommandFlag>
+				<Strings>
+					<ButtonText>Show &amp;History</ButtonText>
+					<LocCanonicalName>.Git.ShowHistory</LocCanonicalName>
+				</Strings>
+			</Button>
+
+			<!-- 3. "Show History for Selection..." button -->
+			<Button guid="SsmsGitBlame" id="ShowSelectionHistoryCommand" priority="0x0150" type="Button">
+				<Parent guid="SsmsGitBlame" id="GitSubMenuGroup" />
+				<Icon guid="ImageCatalogGuid" id="History" />
+				<CommandFlag>IconIsMoniker</CommandFlag>
+				<Strings>
+					<ButtonText>Show History &amp;for Selection...</ButtonText>
+					<LocCanonicalName>.Git.ShowHistoryForSelection</LocCanonicalName>
+				</Strings>
+			</Button>
+		</Buttons>
+	</Commands>
+
+	<CommandPlacements>
+		<CommandPlacement guid="SsmsGitBlame" id="EditorContextMenuGroup" priority="0x0100">
+			<Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_CODEWIN"/>
+		</CommandPlacement>
+
+		<CommandPlacement guid="SsmsGitBlame" id="GitSubMenu" priority="0x0400">
+			<Parent guid="guidSHLMainMenu" id="IDG_VS_CODEWIN_TEXTEDIT"/>
+		</CommandPlacement>
+
+		<CommandPlacement guid="SsmsGitBlame" id="EditorContextMenuGroup" priority="0x0100">
+			<Parent guid="guidSHLMainMenu" id="IDM_VS_MENU_TOOLS"/>
+		</CommandPlacement>
+	</CommandPlacements>
+
+	<KeyBindings>
+		<KeyBinding guid="SsmsGitBlame" id="ShowHistoryCommand" editor="guidVSStd97" key1="H" mod1="Control Alt" />
+		<KeyBinding guid="SsmsGitBlame" id="ToggleBlameCommand" editor="guidVSStd97" key1="B" mod1="Control Alt" />
+	</KeyBindings>
 
   <Symbols>
     <GuidSymbol name="SsmsGitBlame" value="{967e3a6e-ad29-4dad-a396-d54825fd3171}">
-      
-    </GuidSymbol>
-  </Symbols>
+		<IDSymbol name="EditorContextMenuGroup" value="0x0001" />
+		<IDSymbol name="GitSubMenu" value="0x0002" />
+		<IDSymbol name="GitSubMenuGroup" value="0x0003" />
+		<IDSymbol name="ShowHistoryCommand" value="0x0100" />
+		<IDSymbol name="ToggleBlameCommand" value="0x0101" />
+		<IDSymbol name="ShowSelectionHistoryCommand" value="0x0102" />
+	</GuidSymbol>
+
+	<GuidSymbol name="guidSqlQueryEditorContextMenu" value="{33F13AC3-80BB-4ECB-85BC-225435603A5E}">
+		<IDSymbol name="idSqlQueryEditorContextMenu" value="0x0050" />
+	</GuidSymbol>
+</Symbols>
 </CommandTable>

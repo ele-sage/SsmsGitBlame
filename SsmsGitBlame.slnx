@@ -4,7 +4,7 @@
     <Platform Name="arm64" />
     <Platform Name="x86" />
   </Configurations>
-  <Project Path="SsmsGitBlame/SsmsGitBlame.csproj">
+  <Project Path="SsmsGitBlame/SsmsGitBlame.csproj" Id="62955ce4-3712-4011-aa28-e85195736148">
     <Platform Solution="*|arm64" Project="arm64" />
     <Platform Solution="*|x86" Project="x86" />
   </Project>
