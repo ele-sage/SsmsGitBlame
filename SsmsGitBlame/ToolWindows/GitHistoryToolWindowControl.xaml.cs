@@ -20,6 +20,7 @@ namespace SsmsGitBlame
     public partial class GitHistoryToolWindowControl : UserControl
     {
         private readonly GitBlameService _gitService = new GitBlameService();
+        private readonly ToolkitThreadHelper _threadHelper = ToolkitThreadHelper.Create();
 
         private ITextBufferFactoryService _bufferFactory;
         private IDifferenceBufferFactoryService _diffBufferFactory;
@@ -38,6 +39,7 @@ namespace SsmsGitBlame
         private int? _selectionEndEditorLine;
         private int? _pendingTargetGitLineNumber;
         private CancellationTokenSource _loadCts;
+        private CancellationTokenSource _diffSelectionCts;
 
         public GitHistoryToolWindowControl()
         {
@@ -104,12 +106,33 @@ namespace SsmsGitBlame
             _loadCts = new CancellationTokenSource();
             CancellationToken token = _loadCts.Token;
 
+            // 1. Extract DB name and verify if a repository is already configured
+            string dbName = GitBlameService.ExtractDatabaseName(sqlText);
+            string effectiveRepo = _gitService.GetEffectiveRepoRoot(dbName);
+
+            if (string.IsNullOrEmpty(effectiveRepo) || !System.IO.Directory.Exists(effectiveRepo))
+            {
+                // Prompt the user on the UI thread to pick the folder
+                string chosenRepo = GitRepositoryConfigService.PromptUserForRepository(dbName);
+
+                if (string.IsNullOrEmpty(chosenRepo))
+                {
+                    HeaderFilePathTextBlock.Text = "No Git repository configured. Click '📁 Repo...' to select one.";
+                    BreadcrumbTextBlock.Text = "Repository selection cancelled";
+                    CommitListBox.ItemsSource = null;
+                    UpdateDiffBuffers("", "");
+                    return null;
+                }
+            }
+
+            // 2. Resolve the SQL object inside the now-configured repository
             ResolvedSqlObject resolved = await Task.Run(() => _gitService.ResolveSqlObjectFromBuffer(sqlText), token);
 
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
             if (resolved == null)
             {
-                HeaderFilePathTextBlock.Text = "Could not map active SQL script to a Git file in " + _gitService.RepoRoot;
+                string configuredRepo = _gitService.GetEffectiveRepoRoot(dbName);
+                HeaderFilePathTextBlock.Text = $"Could not map active SQL script to a file in '{configuredRepo}'.";
                 BreadcrumbTextBlock.Text = "Unmapped SQL Script";
                 CommitListBox.ItemsSource = null;
                 UpdateDiffBuffers("", "");
@@ -128,12 +151,12 @@ namespace SsmsGitBlame
                 gitEndLine = Math.Max(gitStartLine.Value, selectionEndEditorLine1Based.Value + resolved.EditorToGitLineDelta);
                 ClearSelectionFilterBtn.Content = $"✕ Lines {selectionStartEditorLine1Based}-{selectionEndEditorLine1Based}";
                 ClearSelectionFilterBtn.Visibility = Visibility.Visible;
-                BreadcrumbTextBlock.Text = $"VialisR > {resolved.DbName} > PROCEDUREs > {resolved.FullDisplayName} (Lines {selectionStartEditorLine1Based}-{selectionEndEditorLine1Based})";
+                BreadcrumbTextBlock.Text = $"{resolved.RepoName} > {resolved.DbName} > PROCEDUREs > {resolved.FullDisplayName} (Lines {selectionStartEditorLine1Based}-{selectionEndEditorLine1Based})";
             }
             else
             {
                 ClearSelectionFilterBtn.Visibility = Visibility.Collapsed;
-                BreadcrumbTextBlock.Text = $"VialisR > {resolved.DbName} > PROCEDUREs > {resolved.FullDisplayName}";
+                BreadcrumbTextBlock.Text = $"{resolved.RepoName} > {resolved.DbName} > PROCEDUREs > {resolved.FullDisplayName}";
             }
 
             string branch = string.IsNullOrWhiteSpace(BranchTextBox.Text) ? "HEAD" : BranchTextBox.Text.Trim();
@@ -177,20 +200,29 @@ namespace SsmsGitBlame
 
         private void OnCommitSelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
-            if (!(CommitListBox.SelectedItem is GitCommitEntry selectedCommit))
+            if (CommitListBox.SelectedItem is not GitCommitEntry selectedCommit)
                 return;
 
-            ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
+            _diffSelectionCts?.Cancel();
+            _diffSelectionCts?.Dispose();
+            _diffSelectionCts = new CancellationTokenSource();
+            CancellationToken token = _diffSelectionCts.Token;
+
+            _threadHelper.JoinableTaskFactory.RunAsync(async () =>
             {
                 var (leftSql, rightSql, parentShort, commitShort) = await Task.Run(
-                    () => _gitService.GetCommitDiffAsync(selectedCommit));
+                    () => _gitService.GetCommitDiffAsync(selectedCommit), token);
 
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
+                if (token.IsCancellationRequested) return;
+                if (CommitListBox.SelectedItem != selectedCommit) return;
+                if (_diffViewer == null || _diffViewer.IsClosed) return;
 
                 _currentRightRevisionSql = rightSql ?? "";
                 ParentShaTextBlock.Text = parentShort;
                 CurrentShaTextBlock.Text = commitShort;
-                HeaderFilePathTextBlock.Text = selectedCommit.GitFilePath;
+                HeaderFilePathTextBlock.Text = selectedCommit.GitFilePath ?? "";
 
                 UpdateDiffBuffers(leftSql, rightSql);
             }).FileAndForget(nameof(OnCommitSelectionChanged));
@@ -216,7 +248,7 @@ namespace SsmsGitBlame
 
         private void OnSnapshotDifferenceChanged(object sender, SnapshotDifferenceChangeEventArgs e)
         {
-            ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
+            _threadHelper.JoinableTaskFactory.RunAsync(async () =>
             {
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
@@ -278,7 +310,7 @@ namespace SsmsGitBlame
         {
             if (string.IsNullOrEmpty(_currentRightRevisionSql)) return;
 
-            ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
+            _threadHelper.JoinableTaskFactory.RunAsync(async () =>
             {
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
@@ -309,7 +341,7 @@ namespace SsmsGitBlame
         {
             if (!string.IsNullOrEmpty(_lastSqlBufferText))
             {
-                ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
+                _threadHelper.JoinableTaskFactory.RunAsync(async () =>
                 {
                     await LoadHistoryForSqlAsync(_lastSqlBufferText, null, null);
                 }).FileAndForget(nameof(OnClearSelectionFilterClick));
@@ -354,10 +386,26 @@ namespace SsmsGitBlame
         {
             if (!string.IsNullOrEmpty(_lastSqlBufferText))
             {
-                ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
+                _threadHelper.JoinableTaskFactory.RunAsync(async () =>
                 {
                     await LoadHistoryForSqlAsync(_lastSqlBufferText, _selectionStartEditorLine, _selectionEndEditorLine);
                 }).FileAndForget(nameof(OnRefreshButtonClick));
+            }
+        }
+
+        private void OnSelectRepoButtonClick(object sender, RoutedEventArgs e)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            string dbName = _currentResolvedObj?.DbName ?? GitBlameService.ExtractDatabaseName(_lastSqlBufferText);
+            string newRepo = GitRepositoryConfigService.PromptUserForRepository(dbName);
+
+            if (!string.IsNullOrEmpty(newRepo) && !string.IsNullOrEmpty(_lastSqlBufferText))
+            {
+                _threadHelper.JoinableTaskFactory.RunAsync(async () =>
+                {
+                    await LoadHistoryForSqlAsync(_lastSqlBufferText, _selectionStartEditorLine, _selectionEndEditorLine);
+                }).FileAndForget(nameof(OnSelectRepoButtonClick));
             }
         }
 
@@ -366,7 +414,7 @@ namespace SsmsGitBlame
             if (e.Key == Key.Enter && !string.IsNullOrEmpty(_lastSqlBufferText))
             {
                 e.Handled = true;
-                ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
+                _threadHelper.JoinableTaskFactory.RunAsync(async () =>
                 {
                     await LoadHistoryForSqlAsync(_lastSqlBufferText, _selectionStartEditorLine, _selectionEndEditorLine);
                 }).FileAndForget(nameof(OnBranchTextBoxKeyDown));
@@ -376,6 +424,7 @@ namespace SsmsGitBlame
         private void OnControlUnloaded(object sender, RoutedEventArgs e)
         {
             _loadCts?.Cancel();
+            _diffSelectionCts?.Cancel();
         }
     }
 }

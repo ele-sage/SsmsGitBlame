@@ -1,0 +1,15 @@
+VSIX Tab:
+1. Disable Deploy VSIX content to experimental instance for debugging: False
+2. Copy VSIX content to the following location: True
+   Input Box: Output directory: C:\Program Files\Microsoft SQL Server Management Studio 22\Release\Common7\IDE\Extensions\SsmsGitBlame
+
+Build Events Tab:
+1. Post-Build event command line: 
+	copy /b "C:\Program Files\Microsoft SQL Server Management Studio 22\Release\Common7\IDE\Extensions\extensions.configurationchanged" +,, "C:\Program Files\Microsoft SQL Server Management Studio 22\Release\Common7\IDE\Extensions\extensions.configurationchanged"
+	for /d %%i in ("%LocalAppData%\Microsoft\SSMS\22.0*") do @if exist "%%i\ComponentModelCache" rmdir /s /q "%%i\ComponentModelCache"
+
+Debug Tab:
+1. Start external program:
+	Replace: C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\devenv.exe
+	With: C:\Program Files\Microsoft SQL Server Management Studio 22\Common7\IDE\Ssms.exe
+2. Remove Start Options: /rootsuffix Exp

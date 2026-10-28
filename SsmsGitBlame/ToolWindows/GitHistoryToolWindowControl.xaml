@@ -110,6 +110,12 @@
                                 Margin="4,0,0,0"
                                 FontSize="14"
                                 Click="OnRefreshButtonClick"/>
+                        <Button x:Name="SelectRepoBtn"
+                                Content="📁 Repo..."
+                                ToolTip="Change Git Repository folder for this Solution / Database"
+                                Style="{StaticResource JbToolbarButtonStyle}"
+                                Margin="4,0,0,0"
+                                Click="OnSelectRepoButtonClick"/>
                         <Button x:Name="ClearSelectionFilterBtn"
                                 Content="✕ Selection Filter"
                                 ToolTip="Clear line selection filter and show full file history"

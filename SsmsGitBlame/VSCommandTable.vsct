@@ -57,6 +57,18 @@
 					<LocCanonicalName>.Git.ShowHistoryForSelection</LocCanonicalName>
 				</Strings>
 			</Button>
+
+			<!-- 4. "Set Git Repository..." button -->
+			<Button guid="SsmsGitBlame" id="SetRepositoryCommand" priority="0x0200" type="Button">
+				<Parent guid="SsmsGitBlame" id="GitSubMenuGroup" />
+				<Icon guid="ImageCatalogGuid" id="OpenFolder" />
+				<CommandFlag>IconIsMoniker</CommandFlag>
+				<Strings>
+					<ButtonText>Set Git &amp;Repository Folder...</ButtonText>
+					<LocCanonicalName>.Git.SetRepositoryFolder</LocCanonicalName>
+				</Strings>
+			</Button>
+			
 		</Buttons>
 	</Commands>
 
@@ -87,6 +99,7 @@
 		<IDSymbol name="ShowHistoryCommand" value="0x0100" />
 		<IDSymbol name="ToggleBlameCommand" value="0x0101" />
 		<IDSymbol name="ShowSelectionHistoryCommand" value="0x0102" />
+		<IDSymbol name="SetRepositoryCommand" value="0x0103" />
 	</GuidSymbol>
 
 	<GuidSymbol name="guidSqlQueryEditorContextMenu" value="{33F13AC3-80BB-4ECB-85BC-225435603A5E}">

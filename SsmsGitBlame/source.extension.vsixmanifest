@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
 	<Metadata>
-		<Identity Id="SsmsGitBlame.9e4a2a3f-1ad4-4bda-9165-c0f636a5f398" Version="1.0" Language="en-US" Publisher="EmileLeSage" />
+		<Identity Id="SsmsGitBlame.9e4a2a3f-1ad4-4bda-9165-c0f636a5f398" Version="1.0.0" Language="en-US" Publisher="EmileLeSage" />
 		<DisplayName>SsmsGitBlame</DisplayName>
-		<Description xml:space="preserve">Inline Git Blame for SSMS Stored Procedure Modify Windows.</Description>
+		<Description xml:space="preserve">JetBrains-style Git Show History tool window, Selection History, and inline Git Blame annotations for SSMS 22 Stored Procedures.</Description>
 		<Icon>Resources\Icon.png</Icon>
 		<PreviewImage>Resources\Icon.png</PreviewImage>
 	</Metadata>
