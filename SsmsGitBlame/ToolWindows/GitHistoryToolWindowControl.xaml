@@ -1,0 +1,282 @@
+﻿<UserControl x:Class="SsmsGitBlame.GitHistoryToolWindowControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             mc:Ignorable="d" 
+             Background="#F7F8FA"
+             Foreground="#1E1F22"
+             FontFamily="Segoe UI"
+             FontSize="12">
+
+    <UserControl.Resources>
+        <Style x:Key="JbToolbarButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#2B2D30"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="6,2"/>
+            <Setter Property="Margin" Value="1,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="3"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#E6E8EC"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#D4D7DD"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="JbCommitItemStyle" TargetType="ListBoxItem">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#1E1F22"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="ItemBorder"
+                                Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#EDF2FA"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#D4E2FF"/>
+                                <Setter Property="Foreground" Value="#000000"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="24"/>
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="460" MinWidth="260"/>
+                <ColumnDefinition Width="4"/>
+                <ColumnDefinition Width="*" MinWidth="400"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- ================= LEFT PANE: COMMIT LIST ================= -->
+            <Grid Grid.Column="0" Background="#FFFFFF">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="32"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Left Toolbar: Branch: HEAD + Refresh + Selection Badge -->
+                <Border Grid.Row="0" Background="#F7F8FA" BorderBrush="#DFE1E5" BorderThickness="0,0,0,1" Padding="8,0">
+                    <DockPanel LastChildFill="False">
+                        <TextBlock Text="Branch:" VerticalAlignment="Center" Foreground="#5A5D63" Margin="0,0,4,0"/>
+                        <TextBox x:Name="BranchTextBox"
+                                 Text="HEAD"
+                                 Width="80"
+                                 VerticalAlignment="Center"
+                                 Background="#FFFFFF"
+                                 Foreground="#1E1F22"
+                                 BorderBrush="#C9CCD1"
+                                 Padding="4,2"
+                                 KeyDown="OnBranchTextBoxKeyDown"/>
+                        <Button Content="↻"
+                                ToolTip="Refresh History"
+                                Style="{StaticResource JbToolbarButtonStyle}"
+                                Margin="4,0,0,0"
+                                FontSize="14"
+                                Click="OnRefreshButtonClick"/>
+                        <Button x:Name="SelectRepoBtn"
+                                Content="📁 Repo..."
+                                ToolTip="Change Git Repository folder for this Solution / Database"
+                                Style="{StaticResource JbToolbarButtonStyle}"
+                                Margin="4,0,0,0"
+                                Click="OnSelectRepoButtonClick"/>
+                        <Button x:Name="ClearSelectionFilterBtn"
+                                Content="✕ Selection Filter"
+                                ToolTip="Clear line selection filter and show full file history"
+                                Style="{StaticResource JbToolbarButtonStyle}"
+                                Foreground="#3574F0"
+                                BorderBrush="#3574F0"
+                                Visibility="Collapsed"
+                                Margin="6,0,0,0"
+                                Click="OnClearSelectionFilterClick"/>
+                    </DockPanel>
+                </Border>
+
+                <!-- Commit History ListBox -->
+                <ListBox x:Name="CommitListBox"
+                         Grid.Row="1"
+                         Background="#FFFFFF"
+                         BorderThickness="0"
+                         ItemContainerStyle="{StaticResource JbCommitItemStyle}"
+                         SelectionChanged="OnCommitSelectionChanged"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="95"/>
+                                    <ColumnDefinition Width="125"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Grid.Column="0"
+                                           Text="{Binding Author}"
+                                           TextTrimming="CharacterEllipsis"
+                                           Margin="0,0,8,0"/>
+
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding DisplayDate}"
+                                           Foreground="#6C707E"
+                                           Margin="0,0,8,0"/>
+
+                                <TextBlock Grid.Column="2"
+                                           Text="{Binding Subject}"
+                                           TextTrimming="CharacterEllipsis"
+                                           ToolTip="{Binding Subject}"/>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Grid>
+
+            <!-- ================= SPLITTER ================= -->
+            <GridSplitter Grid.Column="1"
+                          Width="4"
+                          HorizontalAlignment="Stretch"
+                          VerticalAlignment="Stretch"
+                          Background="#DFE1E5"
+                          ShowsPreview="True"/>
+
+            <!-- ================= RIGHT PANE: DIFF VIEWER ================= -->
+            <Grid Grid.Column="2" Background="#FFFFFF">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="32"/>
+                    <RowDefinition Height="44"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Right Toolbar: Prev/Next, Copy/Restore, Diff Count, Mode Buttons -->
+                <Border Grid.Row="0" Background="#F7F8FA" BorderBrush="#DFE1E5" BorderThickness="0,0,0,1" Padding="6,0">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Content="↑"
+                                    ToolTip="Previous Difference"
+                                    Style="{StaticResource JbToolbarButtonStyle}"
+                                    Click="OnPrevDiffClick"/>
+                            <Button Content="↓"
+                                    ToolTip="Next Difference"
+                                    Style="{StaticResource JbToolbarButtonStyle}"
+                                    Click="OnNextDiffClick"/>
+
+                            <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="6,4" Background="#DFE1E5"/>
+
+                            <Button Content="📋 Copy Revision SQL"
+                                    ToolTip="Copy this revision's full SQL to the clipboard"
+                                    Style="{StaticResource JbToolbarButtonStyle}"
+                                    Click="OnCopyRevisionSqlClick"/>
+
+                            <Button Content="⏪ Restore to Editor"
+                                    ToolTip="Replace the active SSMS editor's SQL with this revision"
+                                    Style="{StaticResource JbToolbarButtonStyle}"
+                                    Click="OnRestoreToEditorClick"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock x:Name="DiffCountTextBlock"
+                                       Text="0 differences"
+                                       Foreground="#5A5D63"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,12,0"/>
+
+                            <Button x:Name="SideBySideModeBtn"
+                                    Content="◫"
+                                    ToolTip="Side-by-Side Viewer"
+                                    Style="{StaticResource JbToolbarButtonStyle}"
+                                    Click="OnSideBySideModeClick"/>
+
+                            <Button x:Name="InlineModeBtn"
+                                    Content="▭"
+                                    ToolTip="Unified / Inline Viewer"
+                                    Style="{StaticResource JbToolbarButtonStyle}"
+                                    BorderBrush="#3574F0"
+                                    Click="OnInlineModeClick"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- Two-Line Commit SHA + File Path Header (No Lock Icons) -->
+                <Border Grid.Row="1" Background="#F7F8FA" BorderBrush="#DFE1E5" BorderThickness="0,0,0,1" Padding="10,4">
+                    <StackPanel VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                            <TextBlock x:Name="ParentShaTextBlock"
+                                       Text="--------"
+                                       Foreground="#1E1F22"
+                                       FontWeight="SemiBold"
+                                       FontFamily="Consolas"
+                                       Margin="0,0,10,0"/>
+                            <TextBlock x:Name="HeaderFilePathTextBlock"
+                                       Text="Right-click inside a Stored Procedure and select Git > Show History"
+                                       Foreground="#5A5D63"
+                                       TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+                        <TextBlock x:Name="CurrentShaTextBlock"
+                                   Text="--------"
+                                   Foreground="#1E1F22"
+                                   FontWeight="SemiBold"
+                                   FontFamily="Consolas"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Host Container for Visual Studio IWpfDifferenceViewer -->
+                <Border x:Name="DiffViewerHost" Grid.Row="2" Background="#FFFFFF"/>
+            </Grid>
+        </Grid>
+
+        <!-- Bottom Status / Breadcrumb Bar -->
+        <Border Grid.Row="1" Background="#F7F8FA" BorderBrush="#DFE1E5" BorderThickness="0,1,0,0" Padding="8,0">
+            <DockPanel>
+                <TextBlock x:Name="BreadcrumbTextBlock"
+                           Text="No SQL object loaded"
+                           Foreground="#5A5D63"
+                           VerticalAlignment="Center"/>
+                <TextBlock x:Name="EncodingStatusTextBlock"
+                           Text="CRLF   UTF-8   4 spaces"
+                           Foreground="#5A5D63"
+                           HorizontalAlignment="Right"
+                           VerticalAlignment="Center"/>
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>
