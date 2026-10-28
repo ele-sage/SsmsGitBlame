@@ -32,6 +32,7 @@ namespace SsmsGitBlame
         public const int ToggleBlameCommand = 0x0101;
         public const int ShowSelectionHistoryCommand = 0x0102;
         public const int SetRepositoryCommand = 0x0103;
+        public const int GlobalGitSearch = 0x0104;
         public const int idSqlQueryEditorContextMenu = 0x0050;
     }
 }

@@ -49,11 +49,13 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Commands\SetGitRepositoryCommand.cs" />
+    <Compile Include="Commands\ShowGitSearchCommand.cs" />
     <Compile Include="Editor\Controls\BlameTagControl.xaml.cs">
       <DependentUpon>BlameTagControl.xaml</DependentUpon>
     </Compile>
     <Compile Include="Services\GitBlameService.cs" />
     <Compile Include="Services\GitRepositoryConfigService.cs" />
+    <Compile Include="Services\GitSearchService.cs" />
     <Compile Include="ToolWindows\GitHistoryToolWindow.cs" />
     <Compile Include="ToolWindows\GitHistoryToolWindowControl.xaml.cs">
       <DependentUpon>GitHistoryToolWindowControl.xaml</DependentUpon>
@@ -77,6 +79,11 @@
       <LastGenOutput>VSCommandTable.cs</LastGenOutput>
     </VSCTCompile>
     <Compile Include="Commands\ToggleGitBlameCommand.cs" />
+    <Compile Include="ToolWindows\GitSearchToolWindow.cs" />
+    <Compile Include="ToolWindows\GitSearchToolWindowControl.xaml.cs">
+      <DependentUpon>GitSearchToolWindowControl.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ToolWindows\SearchHighlightBlock.cs" />
     <Compile Include="VSCommandTable.cs">
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
@@ -115,6 +122,10 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="ToolWindows\GitHistoryToolWindowControl.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="ToolWindows\GitSearchToolWindowControl.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
