@@ -16,6 +16,10 @@ namespace SsmsGitBlame
         Style = VsDockStyle.Tabbed,
         Window = WindowGuids.OutputWindow,
         Orientation = ToolWindowOrientation.Bottom)]
+    [ProvideToolWindow(typeof(GitSearchToolWindow.Pane),
+        Style = VsDockStyle.Tabbed,
+        Window = WindowGuids.OutputWindow,
+        Orientation = ToolWindowOrientation.Bottom)]
     [Guid(PackageGuids.SsmsGitBlameString)]
     public sealed class SsmsGitBlamePackage : ToolkitPackage
     {
