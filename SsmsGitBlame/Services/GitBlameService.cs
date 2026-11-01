@@ -1,8 +1,9 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -43,27 +44,24 @@ namespace SsmsGitBlame
 
     public sealed class GitBlameService
     {
-        private static readonly Regex DbRegex = new Regex(
-            @"USE\s+\[?(?<db>[^\]\r\n\s;]+)\]?",
-            RegexOptions.IgnoreCase | RegexOptions.Compiled);
-
-        private static readonly Regex ObjRegex = new Regex(
-            @"(?<kw>ALTER|CREATE(?:\s+OR\s+ALTER)?)\s+(?<type>PROC|PROCEDURE|VIEW|FUNCTION)\s+(?:\[?(?<schema>[^\]\.\s]+)\]?\.)?\[?(?<name>[^\]\s\(]+)\]?",
-            RegexOptions.IgnoreCase | RegexOptions.Compiled);
-
-        private static readonly Regex GitObjRegex = new Regex(
-            @"(?<kw>ALTER|CREATE(?:\s+OR\s+ALTER)?)\s+(?:PROC|PROCEDURE|VIEW|FUNCTION)\b",
-            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly ConcurrentDictionary<string, Dictionary<string, string>> RepoFileIndexCache
+            = new ConcurrentDictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
 
         private readonly string _explicitRepoRoot;
 
         private string _cachedGitFilePath;
+        private DateTime _cachedGitFileWriteTimeUtc;
         private string _cachedGitHeaderPrefix = "";
         private string _cachedGitFullText = "";
         private string _cachedGitKeyword = "";
         private int _cachedGitStartOffsetLine;
 
         public string RepoRoot => GetEffectiveRepoRoot() ?? "(Not Configured)";
+
+        static GitBlameService()
+        {
+            GitRepositoryConfigService.RepositoryChanged += (s, e) => RepoFileIndexCache.Clear();
+        }
 
         public GitBlameService(string explicitRepoRoot = null)
         {
@@ -72,10 +70,7 @@ namespace SsmsGitBlame
 
         public static string ExtractDatabaseName(string sqlText)
         {
-            if (string.IsNullOrWhiteSpace(sqlText)) return null;
-            string headerSearchSpace = sqlText.Length > 4000 ? sqlText.Substring(0, 4000) : sqlText;
-            var dbMatch = DbRegex.Match(headerSearchSpace);
-            return dbMatch.Success ? dbMatch.Groups["db"].Value.Trim() : null;
+            return SqlScriptDomParser.ExtractDatabaseName(sqlText);
         }
 
         public string GetEffectiveRepoRoot(string dbName = null, string activeDocumentPath = null)
@@ -91,61 +86,58 @@ namespace SsmsGitBlame
             if (string.IsNullOrWhiteSpace(sqlText) || sqlText.Length <= 20)
                 return null;
 
-            string headerSearchSpace = sqlText.Length > 4000 ? sqlText.Substring(0, 4000) : sqlText;
-            var objMatch = ObjRegex.Match(headerSearchSpace);
-            if (!objMatch.Success) return null;
+            ParsedSqlObjectHeader parsedEditor = SqlScriptDomParser.ParseHeader(sqlText);
+            if (parsedEditor == null)
+                return null;
 
-            var dbMatch = DbRegex.Match(headerSearchSpace);
-            string dbName = dbMatch.Success ? dbMatch.Groups["db"].Value.Trim() : "d1_legos";
-
+            string dbName = parsedEditor.DatabaseName;
             string repoRoot = GetEffectiveRepoRoot(dbName, activeDocumentPath);
             if (string.IsNullOrEmpty(repoRoot) || !Directory.Exists(repoRoot))
                 return null;
 
-            string rawType = objMatch.Groups["type"].Value.ToUpperInvariant();
-            string folderType = rawType.StartsWith("PROC", StringComparison.Ordinal) ? "PROCEDUREs" : rawType + "s";
-            string schema = objMatch.Groups["schema"].Success ? objMatch.Groups["schema"].Value.Trim() : "dbo";
-            string objName = objMatch.Groups["name"].Value.Trim();
-
-            string gitFilePath = FindSqlObjectFileInRepo(repoRoot, dbName, folderType, schema, objName);
+            string gitFilePath = FindSqlObjectFileInRepo(repoRoot, parsedEditor);
             if (string.IsNullOrEmpty(gitFilePath) || !File.Exists(gitFilePath))
                 return null;
 
-            string gitFileText = File.ReadAllText(gitFilePath);
-            var gitObjMatch = GitObjRegex.Match(gitFileText);
-
-            string gitHeaderPrefix = "";
-            string gitKeyword = "";
-            int gitStartOffsetLine = 0;
-            if (gitObjMatch.Success)
+            string relativePath = gitFilePath.Substring(repoRoot.Length).TrimStart('\\', '/').Replace('\\', '/');
+            if (string.IsNullOrEmpty(dbName))
             {
-                gitHeaderPrefix = gitFileText.Substring(0, gitObjMatch.Index);
-                gitKeyword = gitObjMatch.Groups["kw"].Value;
-                gitStartOffsetLine = CountNewLines(gitHeaderPrefix);
+                dbName = InferDatabaseFromRelativePath(relativePath, parsedEditor);
             }
 
-            int editorSpStartLine = CountNewLines(sqlText, objMatch.Index);
-            string liveSpBody = sqlText.Substring(objMatch.Index);
-            if (!string.IsNullOrEmpty(gitKeyword))
+            string gitFileText = File.ReadAllText(gitFilePath);
+            ParsedSqlObjectHeader parsedGit = SqlScriptDomParser.ParseHeader(gitFileText);
+
+            string gitHeaderPrefix = "";
+            string gitVerb = "";
+            int gitStartOffsetLine = 0;
+
+            if (parsedGit != null)
             {
-                string editorKeyword = objMatch.Groups["kw"].Value;
-                if (!gitKeyword.Equals(editorKeyword, StringComparison.OrdinalIgnoreCase))
-                {
-                    liveSpBody = gitKeyword + liveSpBody.Substring(editorKeyword.Length);
-                }
+                gitHeaderPrefix = gitFileText.Substring(0, parsedGit.StatementStartOffset);
+                gitVerb = parsedGit.DdlVerbText;
+                gitStartOffsetLine = parsedGit.StatementStartLine0Based;
+            }
+
+            int editorSpStartLine = parsedEditor.StatementStartLine0Based;
+            string liveSpBody = sqlText.Substring(parsedEditor.StatementStartOffset);
+
+            if (!string.IsNullOrEmpty(gitVerb) &&
+                !gitVerb.Equals(parsedEditor.DdlVerbText, StringComparison.OrdinalIgnoreCase))
+            {
+                liveSpBody = gitVerb + liveSpBody.Substring(parsedEditor.DdlVerbLength);
             }
 
             string normalizedLiveSql = gitHeaderPrefix + liveSpBody;
-            string relativePath = gitFilePath.Substring(repoRoot.Length).TrimStart('\\', '/').Replace('\\', '/');
 
             return new ResolvedSqlObject
             {
                 RepoRoot = repoRoot,
                 RepoName = new DirectoryInfo(repoRoot).Name,
-                DbName = dbName,
-                Schema = schema,
-                ObjectName = objName,
-                FolderType = folderType,
+                DbName = dbName ?? new DirectoryInfo(repoRoot).Name,
+                Schema = parsedEditor.SchemaName,
+                ObjectName = parsedEditor.ObjectName,
+                FolderType = parsedEditor.DacFxFolderName,
                 GitFilePath = gitFilePath,
                 RelativeGitPath = relativePath,
                 NormalizedLiveSql = normalizedLiveSql,
@@ -154,22 +146,135 @@ namespace SsmsGitBlame
             };
         }
 
-        private static string FindSqlObjectFileInRepo(
-            string repoRoot,
-            string dbName,
-            string folderType,
-            string schema,
-            string objName)
+        private static string InferDatabaseFromRelativePath(string relativePath, ParsedSqlObjectHeader header)
         {
-            string candidateWithDb = Path.Combine(repoRoot, dbName, folderType, $"{schema}.{objName}.sql");
-            if (File.Exists(candidateWithDb))
-                return candidateWithDb;
+            if (string.IsNullOrEmpty(relativePath))
+                return null;
 
-            string candidateWithoutDb = Path.Combine(repoRoot, folderType, $"{schema}.{objName}.sql");
-            if (File.Exists(candidateWithoutDb))
-                return candidateWithoutDb;
+            string[] segments = relativePath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+            if (segments.Length < 2)
+                return null;
 
-            return candidateWithDb;
+            string firstSegment = segments[0];
+
+            // If the first folder is a standard DACFx/SSDT schema or object-type folder, the repo is single-DB
+            if (firstSegment.Equals(header.SchemaName, StringComparison.OrdinalIgnoreCase) ||
+                firstSegment.Equals(header.DacFxFolderName, StringComparison.OrdinalIgnoreCase) ||
+                firstSegment.Equals(header.LegacyFolderName, StringComparison.OrdinalIgnoreCase) ||
+                firstSegment.Equals("Programmability", StringComparison.OrdinalIgnoreCase) ||
+                firstSegment.Equals("dbo", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            return firstSegment;
+        }
+
+        private static string FindSqlObjectFileInRepo(string repoRoot, ParsedSqlObjectHeader header)
+        {
+            string schema = header.SchemaName;
+            string objName = header.ObjectName;
+            string dbName = header.DatabaseName;
+            string dacFxFolder = header.DacFxFolderName;
+            string legacyFolder = header.LegacyFolderName;
+
+            string schemaDotObjFile = $"{schema}.{objName}.sql";
+            string objOnlyFile = $"{objName}.sql";
+
+            var candidates = new List<string>
+            {
+                // 1. Standard SSDT / DACFx SchemaObjectType layout: "{Schema}\{DacFxFolder}\{ObjectName}.sql"
+                Path.Combine(repoRoot, schema, dacFxFolder, objOnlyFile),
+                Path.Combine(repoRoot, schema, dacFxFolder, schemaDotObjFile),
+
+                // 2. Standard DACFx / Redgate ObjectType layout: "{DacFxFolder}\{Schema}.{ObjectName}.sql"
+                Path.Combine(repoRoot, dacFxFolder, schemaDotObjFile),
+                Path.Combine(repoRoot, dacFxFolder, objOnlyFile),
+                Path.Combine(repoRoot, "Programmability", dacFxFolder, schemaDotObjFile),
+                Path.Combine(repoRoot, "Programmability", dacFxFolder, objOnlyFile)
+            };
+
+            // 3. Multi-Database DACFx & Legacy layouts when DatabaseName is known
+            if (!string.IsNullOrEmpty(dbName))
+            {
+                candidates.Add(Path.Combine(repoRoot, dbName, schema, dacFxFolder, objOnlyFile));
+                candidates.Add(Path.Combine(repoRoot, dbName, dacFxFolder, schemaDotObjFile));
+                candidates.Add(Path.Combine(repoRoot, dbName, dacFxFolder, objOnlyFile));
+                candidates.Add(Path.Combine(repoRoot, dbName, legacyFolder, schemaDotObjFile));
+            }
+
+            // 4. Root legacy folder layout
+            candidates.Add(Path.Combine(repoRoot, legacyFolder, schemaDotObjFile));
+
+            foreach (string candidate in candidates)
+            {
+                if (File.Exists(candidate))
+                    return candidate;
+            }
+
+            // 5. Fallback: O(1) lookup in cached repository file index
+            Dictionary<string, string> index = RepoFileIndexCache.GetOrAdd(repoRoot, BuildRepoSqlFileIndex);
+
+            if (!string.IsNullOrEmpty(dbName))
+            {
+                if (index.TryGetValue($"{dbName}/{schema}.{objName}.sql", out string p1) && File.Exists(p1)) return p1;
+                if (index.TryGetValue($"{dbName}/{schema}/{objName}.sql", out string p2) && File.Exists(p2)) return p2;
+            }
+
+            if (index.TryGetValue($"{schema}/{objName}.sql", out string p3) && File.Exists(p3)) return p3;
+            if (index.TryGetValue(schemaDotObjFile, out string p4) && File.Exists(p4)) return p4;
+            if (index.TryGetValue(objOnlyFile, out string p5) && File.Exists(p5)) return p5;
+
+            return null;
+        }
+
+        private static Dictionary<string, string> BuildRepoSqlFileIndex(string repoRoot)
+        {
+            var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                foreach (string file in Directory.EnumerateFiles(repoRoot, "*.sql", SearchOption.AllDirectories))
+                {
+                    if (file.IndexOf("\\.git\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        file.IndexOf("\\bin\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        file.IndexOf("\\obj\\", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        continue;
+                    }
+
+                    string fileName = Path.GetFileName(file);
+                    if (!map.ContainsKey(fileName))
+                    {
+                        map[fileName] = file;
+                    }
+
+                    string rel = file.Substring(repoRoot.Length).TrimStart('\\', '/').Replace('\\', '/');
+                    string[] segments = rel.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+
+                    // If SSDT layout: "{schema}/Stored Procedures/{objName}.sql" or "{db}/{schema}/Stored Procedures/{objName}.sql"
+                    if (segments.Length >= 3)
+                    {
+                        string parentSchemaCandidate = segments[segments.Length - 3];
+                        string schemaObjKey = $"{parentSchemaCandidate}/{fileName}";
+                        if (!map.ContainsKey(schemaObjKey))
+                        {
+                            map[schemaObjKey] = file;
+                        }
+                    }
+
+                    if (segments.Length >= 2)
+                    {
+                        string firstFolder = segments[0];
+                        string dbKey = $"{firstFolder}/{fileName}";
+                        if (!map.ContainsKey(dbKey))
+                        {
+                            map[dbKey] = file;
+                        }
+                    }
+                }
+            }
+            catch { }
+            return map;
         }
 
         public async Task<List<GitCommitEntry>> GetFileHistoryAsync(
@@ -213,37 +318,38 @@ namespace SsmsGitBlame
             string refArg = string.IsNullOrWhiteSpace(branchOrRef) ? "HEAD" : branchOrRef.Trim();
             string args;
 
+            int maxCommits = Math.Max(10, GeneralOptions.Instance.MaxHistoryCommits);
             if (isLineRangeQuery)
             {
                 int totalDiskLines = Math.Max(1, CountNewLines(resolvedObj.DiskGitSql) + 1);
                 int sLine = Math.Max(1, Math.Min(gitStartLine1Based.Value, totalDiskLines));
                 int eLine = Math.Max(sLine, Math.Min(gitEndLine1Based.Value, totalDiskLines));
-
-                args = $"log {refArg} --no-patch -n 150 --pretty=format:\"%H%x1F%P%x1F%an%x1F%at%x1F%s\" -L {sLine},{eLine}:\"{resolvedObj.RelativeGitPath}\"";
+                args = $"log {refArg} --no-patch -n {maxCommits} --pretty=format:\"%H%x1F%P%x1F%an%x1F%at%x1F%s\" -L {sLine},{eLine}:\"{resolvedObj.RelativeGitPath}\"";
             }
             else
             {
-                args = $"log {refArg} --follow -n 250 --pretty=format:\"%H%x1F%P%x1F%an%x1F%at%x1F%s\" -- \"{resolvedObj.RelativeGitPath}\"";
+                args = $"log {refArg} --follow -n {maxCommits} --pretty=format:\"%H%x1F%P%x1F%an%x1F%at%x1F%s\" -- \"{resolvedObj.RelativeGitPath}\"";
             }
 
-            var psi = new System.Diagnostics.ProcessStartInfo("git", args)
+            var psi = new ProcessStartInfo("git", args)
             {
                 WorkingDirectory = resolvedObj.RepoRoot,
                 RedirectStandardOutput = true,
-                RedirectStandardError = true,
+                RedirectStandardError = false, // Prevent OS stderr buffer deadlock
                 StandardOutputEncoding = Encoding.UTF8,
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
 
-            using (var proc = System.Diagnostics.Process.Start(psi))
+            using (var proc = Process.Start(psi))
+            using (token.Register(() => SafeKillProcess(proc)))
             {
                 string line;
                 while ((line = await proc.StandardOutput.ReadLineAsync().ConfigureAwait(false)) != null)
                 {
                     if (token.IsCancellationRequested)
                     {
-                        try { proc.Kill(); } catch { }
+                        SafeKillProcess(proc);
                         break;
                     }
 
@@ -257,6 +363,7 @@ namespace SsmsGitBlame
                     string firstParent = string.IsNullOrWhiteSpace(parentRaw)
                         ? ""
                         : parentRaw.Split(' ')[0];
+
                     string author = parts[2];
                     long.TryParse(parts[3], out long unixTime);
                     string subject = parts[4];
@@ -277,15 +384,13 @@ namespace SsmsGitBlame
                         IsWorkingTreeDiff = false
                     });
                 }
-
-                proc.WaitForExit(1000);
             }
 
             return commits;
         }
 
         public async Task<(string LeftSql, string RightSql, string ParentShortSha, string CommitShortSha)> GetCommitDiffAsync(
-            GitCommitEntry entry)
+                    GitCommitEntry entry)
         {
             if (entry == null)
                 return ("", "", "", "");
@@ -303,17 +408,19 @@ namespace SsmsGitBlame
                 return (headSql, entry.LiveBufferSql ?? "", "HEAD", "Live Editor");
             }
 
-            string commitSqlTask = await RunGitShowAsync(repoRoot, $"{entry.CommitSha}:{entry.RelativeGitPath}").ConfigureAwait(false);
-            string parentSqlTask = "";
+            Task<string> commitSqlTask = RunGitShowAsync(repoRoot, $"{entry.CommitSha}:{entry.RelativeGitPath}");
+            Task<string> parentSqlTask = !string.IsNullOrEmpty(entry.ParentSha)
+                ? RunGitShowAsync(repoRoot, $"{entry.ParentSha}:{entry.RelativeGitPath}")
+                : Task.FromResult("");
 
-            if (!string.IsNullOrEmpty(entry.ParentSha))
-            {
-                parentSqlTask = await RunGitShowAsync(repoRoot, $"{entry.ParentSha}:{entry.RelativeGitPath}").ConfigureAwait(false);
-            }
+            await Task.WhenAll(commitSqlTask, parentSqlTask).ConfigureAwait(false);
+
+            string parentSql = await parentSqlTask.ConfigureAwait(false);
+            string commitSql = await commitSqlTask.ConfigureAwait(false);
 
             return (
-                parentSqlTask ?? "",
-                commitSqlTask ?? "",
+                parentSql ?? "",
+                commitSql ?? "",
                 string.IsNullOrEmpty(entry.ParentSha) ? "Initial" : entry.ShortParentSha,
                 entry.ShortSha
             );
@@ -343,39 +450,33 @@ namespace SsmsGitBlame
             if (string.IsNullOrWhiteSpace(sqlText) || sqlText.Length <= 20)
                 return result;
 
-            string headerSearchSpace = sqlText.Length > 4000 ? sqlText.Substring(0, 4000) : sqlText;
+            ParsedSqlObjectHeader parsedEditor = SqlScriptDomParser.ParseHeader(sqlText);
+            if (parsedEditor == null || token.IsCancellationRequested) return result;
 
-            var objMatch = ObjRegex.Match(headerSearchSpace);
-            if (!objMatch.Success || token.IsCancellationRequested) return result;
-
-            var dbMatch = DbRegex.Match(headerSearchSpace);
-            string dbName = dbMatch.Success ? dbMatch.Groups["db"].Value.Trim() : "d1_legos";
-
+            string dbName = parsedEditor.DatabaseName;
             string repoRoot = GetEffectiveRepoRoot(dbName, activeDocumentPath);
             if (string.IsNullOrEmpty(repoRoot) || !Directory.Exists(repoRoot))
                 return result;
 
-            string rawType = objMatch.Groups["type"].Value.ToUpperInvariant();
-            string folderType = rawType.StartsWith("PROC", StringComparison.Ordinal) ? "PROCEDUREs" : rawType + "s";
-            string schema = objMatch.Groups["schema"].Success ? objMatch.Groups["schema"].Value.Trim() : "dbo";
-            string objName = objMatch.Groups["name"].Value.Trim();
+            string gitFilePath = FindSqlObjectFileInRepo(repoRoot, parsedEditor);
+            if (string.IsNullOrEmpty(gitFilePath) || !File.Exists(gitFilePath))
+                return result;
 
-            string gitFilePath = FindSqlObjectFileInRepo(repoRoot, dbName, folderType, schema, objName);
-
-            if (!string.Equals(_cachedGitFilePath, gitFilePath, StringComparison.OrdinalIgnoreCase))
+            DateTime lastWriteUtc = File.GetLastWriteTimeUtc(gitFilePath);
+            if (!string.Equals(_cachedGitFilePath, gitFilePath, StringComparison.OrdinalIgnoreCase) ||
+                _cachedGitFileWriteTimeUtc != lastWriteUtc)
             {
-                if (!File.Exists(gitFilePath)) return result;
-
                 string gitFileText = File.ReadAllText(gitFilePath);
                 _cachedGitFullText = gitFileText;
-                var gitObjMatch = GitObjRegex.Match(gitFileText);
-
+                ParsedSqlObjectHeader parsedGit = SqlScriptDomParser.ParseHeader(gitFileText);
                 _cachedGitFilePath = gitFilePath;
-                if (gitObjMatch.Success)
+                _cachedGitFileWriteTimeUtc = lastWriteUtc;
+
+                if (parsedGit != null)
                 {
-                    _cachedGitHeaderPrefix = gitFileText.Substring(0, gitObjMatch.Index);
-                    _cachedGitStartOffsetLine = CountNewLines(_cachedGitHeaderPrefix);
-                    _cachedGitKeyword = gitObjMatch.Groups["kw"].Value;
+                    _cachedGitHeaderPrefix = gitFileText.Substring(0, parsedGit.StatementStartOffset);
+                    _cachedGitStartOffsetLine = parsedGit.StatementStartLine0Based;
+                    _cachedGitKeyword = parsedGit.DdlVerbText;
                 }
                 else
                 {
@@ -385,38 +486,43 @@ namespace SsmsGitBlame
                 }
             }
 
-            int spStartOffsetLine = CountNewLines(sqlText, objMatch.Index);
-            string liveSpBody = sqlText.Substring(objMatch.Index);
+            int spStartOffsetLine = parsedEditor.StatementStartLine0Based;
+            string liveSpBody = sqlText.Substring(parsedEditor.StatementStartOffset);
 
-            if (!string.IsNullOrEmpty(_cachedGitKeyword))
+            if (!string.IsNullOrEmpty(_cachedGitKeyword) &&
+                !_cachedGitKeyword.Equals(parsedEditor.DdlVerbText, StringComparison.OrdinalIgnoreCase))
             {
-                string editorKeyword = objMatch.Groups["kw"].Value;
-                if (!_cachedGitKeyword.Equals(editorKeyword, StringComparison.OrdinalIgnoreCase))
-                {
-                    liveSpBody = _cachedGitKeyword + liveSpBody.Substring(editorKeyword.Length);
-                }
+                liveSpBody = _cachedGitKeyword + liveSpBody.Substring(parsedEditor.DdlVerbLength);
             }
 
             string syntheticContents = _cachedGitHeaderPrefix + liveSpBody;
 
-            var psi = new System.Diagnostics.ProcessStartInfo("git", $"blame --porcelain --contents - \"{gitFilePath}\"")
+            // -w ignores whitespace differences (CRLF/LF/indentation) between DB OBJECT_DEFINITION and Git file
+            string whitespaceFlag = GeneralOptions.Instance.IgnoreWhitespaceInBlame ? "-w " : "";
+            var psi = new ProcessStartInfo("git", $"blame --porcelain {whitespaceFlag}--contents - \"{gitFilePath}\"")
             {
                 WorkingDirectory = repoRoot,
                 RedirectStandardInput = true,
                 RedirectStandardOutput = true,
+                RedirectStandardError = false,
                 StandardOutputEncoding = Encoding.UTF8,
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
 
-            using (var proc = System.Diagnostics.Process.Start(psi))
+            using (var proc = Process.Start(psi))
+            using (token.Register(() => SafeKillProcess(proc)))
             {
                 Task writeTask = Task.Run(async () =>
                 {
-                    using (var stdin = new StreamWriter(proc.StandardInput.BaseStream, new UTF8Encoding(false)))
+                    try
                     {
-                        await stdin.WriteAsync(syntheticContents).ConfigureAwait(false);
+                        using (var stdin = new StreamWriter(proc.StandardInput.BaseStream, new UTF8Encoding(false)))
+                        {
+                            await stdin.WriteAsync(syntheticContents).ConfigureAwait(false);
+                        }
                     }
+                    catch { }
                 }, token);
 
                 var commitCache = new Dictionary<string, CommitInfo>(StringComparer.Ordinal);
@@ -431,7 +537,7 @@ namespace SsmsGitBlame
                 {
                     if (token.IsCancellationRequested)
                     {
-                        try { proc.Kill(); } catch { }
+                        SafeKillProcess(proc);
                         return null;
                     }
 
@@ -443,6 +549,7 @@ namespace SsmsGitBlame
                             currentCommit = new CommitInfo();
                             commitCache[currentSha] = currentCommit;
                         }
+
                         if (currentSha != previousSha)
                         {
                             isNewCommitBlock = true;
@@ -457,7 +564,7 @@ namespace SsmsGitBlame
                     {
                         if (long.TryParse(line.Substring(12), out long unixSeconds))
                         {
-                            var dt = DateTimeOffset.FromUnixTimeSeconds(unixSeconds).LocalDateTime;
+                            DateTime dt = DateTimeOffset.FromUnixTimeSeconds(unixSeconds).LocalDateTime;
                             currentCommit.Date = dt.ToString("yyyy-MM-dd HH:mm");
                         }
                     }
@@ -468,9 +575,11 @@ namespace SsmsGitBlame
                     else if (line.Length > 0 && line[0] == '\t')
                     {
                         int editorLine = spStartOffsetLine + (gitLineIndex - _cachedGitStartOffsetLine);
+
                         if (editorLine >= spStartOffsetLine && currentCommit != null)
                         {
                             bool isUncommitted = currentSha.StartsWith("00000000", StringComparison.Ordinal);
+
                             if (isUncommitted && isNewCommitBlock)
                             {
                                 result[editorLine] = new LineBlameViewModel
@@ -479,6 +588,7 @@ namespace SsmsGitBlame
                                     IsUncommitted = true,
                                     CommitSha = "UNCOMMITTED",
                                     Author = "Uncommitted Changes",
+                                    Date = "Working Tree",
                                     Summary = "Working Tree vs Git HEAD",
                                     EditorLineNumber = editorLine,
                                     GitLineNumber = gitLineIndex,
@@ -492,7 +602,7 @@ namespace SsmsGitBlame
                             {
                                 result[editorLine] = new LineBlameViewModel
                                 {
-                                    DisplayText = $"    -- {currentCommit.Date} • {currentCommit.Author} • {currentCommit.Summary}",
+                                    DisplayText = $"    -- {currentCommit.Date}   {currentCommit.Author}   {currentCommit.Summary}",
                                     IsUncommitted = false,
                                     CommitSha = currentSha,
                                     Author = currentCommit.Author,
@@ -507,12 +617,12 @@ namespace SsmsGitBlame
                                 isNewCommitBlock = false;
                             }
                         }
+
                         gitLineIndex++;
                     }
                 }
 
                 await writeTask.ConfigureAwait(false);
-                proc.WaitForExit(1000);
             }
 
             return result;
@@ -538,15 +648,20 @@ namespace SsmsGitBlame
 
             string shortSha = vm.CommitSha.Substring(0, 8);
 
-            string parentSql = await RunGitShowAsync(repoRoot, $"{vm.CommitSha}~1:{relativePath}").ConfigureAwait(false);
-            string commitSql = await RunGitShowAsync(repoRoot, $"{vm.CommitSha}:{relativePath}").ConfigureAwait(false);
+            Task<string> parentSqlTask = RunGitShowAsync(repoRoot, $"{vm.CommitSha}~1:{relativePath}");
+            Task<string> commitSqlTask = RunGitShowAsync(repoRoot, $"{vm.CommitSha}:{relativePath}");
+
+            await Task.WhenAll(parentSqlTask, commitSqlTask).ConfigureAwait(false);
+
+            string parentSql = await parentSqlTask.ConfigureAwait(false);
+            string commitSql = await commitSqlTask.ConfigureAwait(false);
 
             if (string.IsNullOrEmpty(commitSql))
             {
                 return (vm.BaselineGitSql, vm.CurrentLiveSql, "Git Repo File", "Live SSMS Buffer");
             }
 
-            return (parentSql ?? "", commitSql, $"{shortSha}~1 (Before)", $"{shortSha} ({vm.Author} • {vm.Date})");
+            return (parentSql ?? "", commitSql, $"{shortSha}~1 (Before)", $"{shortSha} ({vm.Author}   {vm.Date})");
         }
 
         private static async Task<string> RunGitShowAsync(string repoRoot, string objectSpec)
@@ -554,22 +669,32 @@ namespace SsmsGitBlame
             if (string.IsNullOrEmpty(repoRoot) || !Directory.Exists(repoRoot))
                 return "";
 
-            var psi = new System.Diagnostics.ProcessStartInfo("git", $"show \"{objectSpec}\"")
+            var psi = new ProcessStartInfo("git", $"show \"{objectSpec}\"")
             {
                 WorkingDirectory = repoRoot,
                 RedirectStandardOutput = true,
-                RedirectStandardError = true,
+                RedirectStandardError = false, // Avoid stderr pipe deadlock
                 StandardOutputEncoding = Encoding.UTF8,
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
 
-            using (var proc = System.Diagnostics.Process.Start(psi))
+            using (var proc = Process.Start(psi))
             {
                 string output = await proc.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
                 proc.WaitForExit(1000);
                 return proc.ExitCode == 0 ? output : "";
             }
+        }
+
+        private static void SafeKillProcess(Process proc)
+        {
+            try
+            {
+                if (!proc.HasExited)
+                    proc.Kill();
+            }
+            catch { }
         }
 
         private static int CountNewLines(string text, int maxLength = -1)

@@ -4,21 +4,24 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:local="clr-namespace:SsmsGitBlame"
+             xmlns:platformUi="clr-namespace:Microsoft.VisualStudio.PlatformUI;assembly=Microsoft.VisualStudio.Shell.15.0"
              mc:Ignorable="d" d:DesignHeight="700" d:DesignWidth="900"
-             Background="#F7F8FA" Foreground="#27282C"
+             Background="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowBackgroundBrushKey}}"
+             Foreground="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowTextBrushKey}}"
              FontFamily="Segoe UI" FontSize="12">
 
     <UserControl.Resources>
-        <!-- Toggle button style for Cc, W, .* in Light Theme -->
-        <Style x:Key="JbLightToggleButtonStyle" TargetType="ToggleButton">
+        <!-- Toggle button style for Cc, W, .* adapting to Light & Dark Theme -->
+        <Style x:Key="JbThemedToggleButtonStyle" TargetType="ToggleButton">
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="#707278"/>
+            <Setter Property="Foreground" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowTextBrushKey}}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="Width" Value="24"/>
             <Setter Property="Height" Value="22"/>
             <Setter Property="Margin" Value="2,0"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Opacity" Value="0.75"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ToggleButton">
@@ -30,13 +33,14 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#E4E6EB"/>
-                                <Setter Property="Foreground" Value="#27282C"/>
+                                <Setter TargetName="border" Property="Background" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.CommandBarMouseOverBackgroundBeginBrushKey}}"/>
+                                <Setter Property="Opacity" Value="1.0"/>
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#EAF0FE"/>
+                                <Setter TargetName="border" Property="Background" Value="#263574F0"/>
                                 <Setter TargetName="border" Property="BorderBrush" Value="#3574F0"/>
                                 <Setter Property="Foreground" Value="#3574F0"/>
+                                <Setter Property="Opacity" Value="1.0"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -44,23 +48,24 @@
             </Setter>
         </Style>
 
-        <!-- Result ListBox Item Style in Light Theme -->
-        <Style x:Key="JbLightResultItemStyle" TargetType="ListBoxItem">
+        <!-- Result ListBox Item Style -->
+        <Style x:Key="JbThemedResultItemStyle" TargetType="ListBoxItem">
             <Setter Property="Padding" Value="8,4"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowTextBrushKey}}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
-                        <Border x:Name="Bd" Background="{TemplateBinding Background}" SnapsToDevicePixels="true">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="true">
                             <ContentPresenter/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#EDF1F7"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#1A3574F0"/>
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#D4E2FF"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#333574F0"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -71,43 +76,43 @@
 
     <Grid Margin="12">
         <Grid.RowDefinitions>
-            <!-- 0: Header bar with Title, Count, File mask -->
             <RowDefinition Height="Auto"/>
-            <!-- 1: JetBrains Search Input Box -->
             <RowDefinition Height="Auto"/>
-            <!-- 2: Repository selector / Breadcrumb info -->
             <RowDefinition Height="Auto"/>
-            <!-- 3: Results List -->
             <RowDefinition Height="*" MinHeight="120"/>
-            <!-- 4: Grid Splitter -->
             <RowDefinition Height="5"/>
-            <!-- 5: Code Preview Header + Code View -->
             <RowDefinition Height="1.2*" MinHeight="150"/>
-            <!-- 6: Bottom Action Footer -->
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- 0. Header (Title, Matches count, File mask) -->
         <Grid Grid.Row="0" Margin="0,0,0,8">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <TextBlock Text="Find in Files" FontWeight="SemiBold" FontSize="13" Foreground="#19191C"/>
-                <TextBlock x:Name="MatchStatsTextBlock" Margin="12,0,0,0" Foreground="#707278" Text="0 matches" VerticalAlignment="Center"/>
+                <TextBlock Text="Find in Files" FontWeight="SemiBold" FontSize="13"
+                           Foreground="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowTextBrushKey}}"/>
+                <TextBlock x:Name="MatchStatsTextBlock" Margin="12,0,0,0" Opacity="0.7" Text="0 matches" VerticalAlignment="Center"/>
             </StackPanel>
 
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                <CheckBox x:Name="FileMaskCheckBox" Content="File mask:" IsChecked="True" Foreground="#27282C" 
+                <CheckBox x:Name="FileMaskCheckBox" Content="File mask:" IsChecked="True"
+                          Foreground="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowTextBrushKey}}"
                           VerticalAlignment="Center" Margin="0,0,6,0"/>
-                <Border Background="#FFFFFF" BorderBrush="#C9CCD4" BorderThickness="1" CornerRadius="4">
+                <Border Background="{DynamicResource {x:Static platformUi:EnvironmentColors.ComboBoxBackgroundBrushKey}}"
+                        BorderBrush="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowBorderBrushKey}}"
+                        BorderThickness="1" CornerRadius="4">
                     <TextBox x:Name="FilePatternBox" Text="*.sql" Width="80" Height="22" 
-                             Background="Transparent" BorderThickness="0" Foreground="#27282C"
+                             Background="Transparent" BorderThickness="0"
+                             Foreground="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowTextBrushKey}}"
+                             CaretBrush="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowTextBrushKey}}"
                              VerticalContentAlignment="Center" Padding="4,0" KeyDown="OnSearchTriggerKeyDown"/>
                 </Border>
             </StackPanel>
         </Grid>
 
         <!-- 1. JetBrains Search Input Box -->
-        <Border Grid.Row="1" x:Name="SearchBoxContainer" Background="#FFFFFF" BorderBrush="#3574F0" 
-                BorderThickness="1.5" CornerRadius="5" Height="32" Margin="0,0,0,8">
+        <Border Grid.Row="1" x:Name="SearchBoxContainer"
+                Background="{DynamicResource {x:Static platformUi:EnvironmentColors.ComboBoxBackgroundBrushKey}}"
+                BorderBrush="#3574F0" BorderThickness="1.5" CornerRadius="5" Height="32" Margin="0,0,0,8">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -115,31 +120,32 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- Search Icon -->
-                <TextBlock Grid.Column="0" Text="🔍" FontSize="11" Foreground="#8C9098" Margin="8,0,6,0" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="0" Text="🔍" FontSize="11" Opacity="0.6" Margin="8,0,6,0" VerticalAlignment="Center"/>
 
-                <!-- Search Input -->
                 <TextBox x:Name="SearchBox" Grid.Column="1" Background="Transparent" BorderThickness="0" 
-                         Foreground="#19191C" CaretBrush="#19191C" FontSize="13" VerticalContentAlignment="Center"
+                         Foreground="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowTextBrushKey}}"
+                         CaretBrush="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowTextBrushKey}}"
+                         FontSize="13" VerticalContentAlignment="Center"
                          TextChanged="OnSearchBoxTextChanged" KeyDown="OnSearchTriggerKeyDown"/>
 
-                <!-- Inline Action Toggles: Clear (X), Case (Cc), Words (W), Regex (.*) -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,4,0">
                     <Button x:Name="ClearButton" Content="✕" Width="20" Height="20" Background="Transparent" 
-                            BorderThickness="0" Foreground="#8C9098" Cursor="Hand" Click="OnClearButtonClick" 
+                            BorderThickness="0"
+                            Foreground="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowTextBrushKey}}"
+                            Opacity="0.6" Cursor="Hand" Click="OnClearButtonClick"
                             Visibility="Collapsed" Margin="0,0,4,0"/>
 
-                    <ToggleButton x:Name="MatchCaseToggle" Style="{StaticResource JbLightToggleButtonStyle}" 
+                    <ToggleButton x:Name="MatchCaseToggle" Style="{StaticResource JbThemedToggleButtonStyle}" 
                                   ToolTip="Match Case (Alt+C)" Click="OnToggleOptionClick">
                         <TextBlock Text="Cc" FontWeight="Bold" FontSize="11"/>
                     </ToggleButton>
 
-                    <ToggleButton x:Name="WholeWordToggle" Style="{StaticResource JbLightToggleButtonStyle}" 
+                    <ToggleButton x:Name="WholeWordToggle" Style="{StaticResource JbThemedToggleButtonStyle}" 
                                   ToolTip="Words (Alt+W)" Click="OnToggleOptionClick">
                         <TextBlock Text="W" FontWeight="Bold" FontSize="11"/>
                     </ToggleButton>
 
-                    <ToggleButton x:Name="RegexToggle" Style="{StaticResource JbLightToggleButtonStyle}" 
+                    <ToggleButton x:Name="RegexToggle" Style="{StaticResource JbThemedToggleButtonStyle}" 
                                   ToolTip="Regex (Alt+X)" Click="OnToggleOptionClick">
                         <TextBlock Text=".*" FontWeight="Bold" FontSize="11"/>
                     </ToggleButton>
@@ -149,22 +155,30 @@
 
         <!-- 2. Repository Context / Scope Indicator -->
         <DockPanel Grid.Row="2" Margin="0,0,0,6">
-            <Button DockPanel.Dock="Right" Content="📁 Repo..." Padding="6,2" Background="#FFFFFF" 
-                    BorderBrush="#C9CCD4" Foreground="#27282C" Cursor="Hand" Click="OnSelectRepoButtonClick"/>
+            <Button DockPanel.Dock="Right" Content="Repo..." Padding="6,2"
+                    Background="{DynamicResource {x:Static platformUi:EnvironmentColors.ComboBoxBackgroundBrushKey}}"
+                    BorderBrush="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowBorderBrushKey}}"
+                    Foreground="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowTextBrushKey}}"
+                    Cursor="Hand" Click="OnSelectRepoButtonClick"/>
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <Border Background="#E4E6EB" CornerRadius="3" Padding="6,2" Margin="0,0,8,0">
-                    <TextBlock Text="Git Repository" FontSize="11" Foreground="#27282C" FontWeight="SemiBold"/>
+                <Border Background="#263574F0" CornerRadius="3" Padding="6,2" Margin="0,0,8,0">
+                    <TextBlock Text="Git Repository" FontSize="11" Foreground="#3574F0" FontWeight="SemiBold"/>
                 </Border>
-                <TextBlock x:Name="RepoPathTextBlock" Text="Configuring repo..." Foreground="#707278" 
+                <TextBlock x:Name="RepoPathTextBlock" Text="Configuring repo..." Opacity="0.75"
                            FontSize="11" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
             </StackPanel>
         </DockPanel>
 
-        <!-- 3. Search Results List (Split View: Snippet Left, Path Right) -->
-        <Border Grid.Row="3" Background="#FFFFFF" BorderBrush="#D1D4DC" BorderThickness="1" CornerRadius="4">
+        <!-- 3. Search Results List -->
+        <Border Grid.Row="3"
+                Background="{DynamicResource {x:Static platformUi:EnvironmentColors.ComboBoxBackgroundBrushKey}}"
+                BorderBrush="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowBorderBrushKey}}"
+                BorderThickness="1" CornerRadius="4">
             <ListBox x:Name="ResultsListBox" Background="Transparent" BorderThickness="0"
-                     ItemContainerStyle="{StaticResource JbLightResultItemStyle}"
+                     ItemContainerStyle="{StaticResource JbThemedResultItemStyle}"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     VirtualizingPanel.IsVirtualizing="True"
+                     VirtualizingPanel.VirtualizationMode="Recycling"
                      SelectionChanged="OnResultSelectionChanged"
                      MouseDoubleClick="OnResultMouseDoubleClick"
                      KeyDown="OnResultsListKeyDown">
@@ -176,14 +190,13 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
 
-                            <!-- Snippet (Rendered with custom yellow highlights) -->
                             <local:SearchHighlightBlock Grid.Column="0" Item="{Binding}"
                                                         FontFamily="Consolas, Cascadia Code, Courier New" FontSize="12"/>
 
-                            <!-- File Path + Line right-aligned in subtle gray -->
-                            <TextBlock Grid.Column="1" Foreground="#8C9098" FontSize="11" VerticalAlignment="Center" Margin="16,0,4,0">
+                            <TextBlock Grid.Column="1" Opacity="0.65" FontSize="11" VerticalAlignment="Center" Margin="16,0,4,0"
+                                       Foreground="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowTextBrushKey}}">
                                 <Run Text="{Binding RelativePath, Mode=OneWay}"/>
-                                <Run Text=" "/><Run Text="{Binding LineNumber, Mode=OneWay}" Foreground="#4B505A" FontWeight="SemiBold"/>
+                                <Run Text=":"/><Run Text="{Binding LineNumber, Mode=OneWay}" FontWeight="SemiBold"/>
                             </TextBlock>
                         </Grid>
                     </DataTemplate>
@@ -192,7 +205,9 @@
         </Border>
 
         <!-- 4. Draggable Splitter -->
-        <GridSplitter Grid.Row="4" Height="5" HorizontalAlignment="Stretch" Background="#E4E6EB" Cursor="SizeNS"/>
+        <GridSplitter Grid.Row="4" Height="5" HorizontalAlignment="Stretch"
+                      Background="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowBorderBrushKey}}"
+                      Cursor="SizeNS"/>
 
         <!-- 5. Code Preview Section -->
         <Grid Grid.Row="5" Margin="0,4,0,0">
@@ -201,24 +216,26 @@
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <!-- Preview Header Bar -->
-            <Border Grid.Row="0" Background="#EBECF0" BorderBrush="#D1D4DC" BorderThickness="1,1,1,0" 
-                    Padding="8,4" CornerRadius="4,4,0,0">
+            <Border Grid.Row="0"
+                    Background="{DynamicResource {x:Static platformUi:EnvironmentColors.CommandBarGradientBeginBrushKey}}"
+                    BorderBrush="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowBorderBrushKey}}"
+                    BorderThickness="1,1,1,0" Padding="8,4" CornerRadius="4,4,0,0">
                 <StackPanel Orientation="Horizontal">
-                    <TextBlock x:Name="PreviewFileNameText" FontWeight="SemiBold" Foreground="#19191C" Text="No file selected"/>
-                    <TextBlock x:Name="PreviewFileDirText" Foreground="#707278" Margin="8,0,0,0" Text=""/>
+                    <TextBlock x:Name="PreviewFileNameText" FontWeight="SemiBold" Text="No file selected"/>
+                    <TextBlock x:Name="PreviewFileDirText" Opacity="0.7" Margin="8,0,0,0" Text=""/>
                 </StackPanel>
             </Border>
 
-            <!-- Native VS SQL Text Editor Host -->
-            <Border Grid.Row="1" x:Name="CodePreviewHost" Background="#FFFFFF" BorderBrush="#D1D4DC" BorderThickness="1"/>
+            <Border Grid.Row="1" x:Name="CodePreviewHost"
+                    BorderBrush="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowBorderBrushKey}}"
+                    BorderThickness="1"/>
         </Grid>
 
         <!-- 6. Footer Status / Action Bar -->
         <Grid Grid.Row="6" Margin="0,8,0,0">
-            <TextBlock x:Name="StatusTextBlock" Foreground="#707278" VerticalAlignment="Center" Text="Ready"/>
+            <TextBlock x:Name="StatusTextBlock" Opacity="0.75" VerticalAlignment="Center" Text="Ready"/>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <TextBlock Text="Enter to Open in Editor" Foreground="#8C9098" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                <TextBlock Text="Enter to Open in Editor" Opacity="0.65" VerticalAlignment="Center" Margin="0,0,12,0"/>
                 <Button Content="Open in Editor" Padding="12,3" Background="#3574F0" Foreground="White" 
                         BorderThickness="0" Cursor="Hand" Click="OnOpenSelectedInEditorClick"/>
             </StackPanel>

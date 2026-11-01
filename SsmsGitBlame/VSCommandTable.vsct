@@ -104,7 +104,7 @@
 	<KeyBindings>
 		<KeyBinding guid="SsmsGitBlame" id="ShowHistoryCommand" editor="guidVSStd97" key1="H" mod1="Control Alt" />
 		<KeyBinding guid="SsmsGitBlame" id="ToggleBlameCommand" editor="guidVSStd97" key1="B" mod1="Control Alt" />
-		<KeyBinding guid="SsmsGitBlame" id="GlobalGitSearch" editor="guidVSStd97" key1="G" mod1="Control Alt" />
+		<KeyBinding guid="SsmsGitBlame" id="GlobalGitSearch" editor="guidVSStd97" key1="F" mod1="Control Shift Alt" />
 	</KeyBindings>
 
   <Symbols>

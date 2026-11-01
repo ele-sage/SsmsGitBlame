@@ -3,16 +3,16 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:platformUi="clr-namespace:Microsoft.VisualStudio.PlatformUI;assembly=Microsoft.VisualStudio.Shell.15.0"
              mc:Ignorable="d" 
-             Background="#F7F8FA"
-             Foreground="#1E1F22"
+             Background="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowBackgroundBrushKey}}"
+             Foreground="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowTextBrushKey}}"
              FontFamily="Segoe UI"
              FontSize="12">
-
     <UserControl.Resources>
         <Style x:Key="JbToolbarButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="#2B2D30"/>
+            <Setter Property="Foreground" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowTextBrushKey}}"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="6,2"/>
@@ -31,10 +31,44 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#E6E8EC"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#223574F0"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#D4D7DD"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#383574F0"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- JetBrains >> Gutter Arrow Button Style -->
+        <Style x:Key="JbGutterArrowButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowBackgroundBrushKey}}"/>
+            <Setter Property="Foreground" Value="#3574F0"/>
+            <Setter Property="BorderBrush" Value="#3574F0"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontFamily" Value="Consolas"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Padding" Value="4,0"/>
+            <Setter Property="Height" Value="18"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="3"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#3574F0"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -44,7 +78,7 @@
 
         <Style x:Key="JbCommitItemStyle" TargetType="ListBoxItem">
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="#1E1F22"/>
+            <Setter Property="Foreground" Value="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowTextBrushKey}}"/>
             <Setter Property="Padding" Value="8,4"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
@@ -58,11 +92,10 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ItemBorder" Property="Background" Value="#EDF2FA"/>
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#1A3574F0"/>
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="ItemBorder" Property="Background" Value="#D4E2FF"/>
-                                <Setter Property="Foreground" Value="#000000"/>
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#333574F0"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -85,23 +118,26 @@
             </Grid.ColumnDefinitions>
 
             <!-- ================= LEFT PANE: COMMIT LIST ================= -->
-            <Grid Grid.Column="0" Background="#FFFFFF">
+            <Grid Grid.Column="0" Background="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowBackgroundBrushKey}}">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="32"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
-                <!-- Left Toolbar: Branch: HEAD + Refresh + Selection Badge -->
-                <Border Grid.Row="0" Background="#F7F8FA" BorderBrush="#DFE1E5" BorderThickness="0,0,0,1" Padding="8,0">
+                <Border Grid.Row="0"
+                        Background="{DynamicResource {x:Static platformUi:EnvironmentColors.CommandBarGradientBeginBrushKey}}"
+                        BorderBrush="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowBorderBrushKey}}"
+                        BorderThickness="0,0,0,1" Padding="8,0">
                     <DockPanel LastChildFill="False">
-                        <TextBlock Text="Branch:" VerticalAlignment="Center" Foreground="#5A5D63" Margin="0,0,4,0"/>
+                        <TextBlock Text="Branch:" VerticalAlignment="Center" Opacity="0.75" Margin="0,0,4,0"/>
                         <TextBox x:Name="BranchTextBox"
                                  Text="HEAD"
                                  Width="80"
                                  VerticalAlignment="Center"
-                                 Background="#FFFFFF"
-                                 Foreground="#1E1F22"
-                                 BorderBrush="#C9CCD1"
+                                 Background="{DynamicResource {x:Static platformUi:EnvironmentColors.ComboBoxBackgroundBrushKey}}"
+                                 Foreground="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowTextBrushKey}}"
+                                 CaretBrush="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowTextBrushKey}}"
+                                 BorderBrush="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowBorderBrushKey}}"
                                  Padding="4,2"
                                  KeyDown="OnBranchTextBoxKeyDown"/>
                         <Button Content="↻"
@@ -111,7 +147,7 @@
                                 FontSize="14"
                                 Click="OnRefreshButtonClick"/>
                         <Button x:Name="SelectRepoBtn"
-                                Content="📁 Repo..."
+                                Content="Repo..."
                                 ToolTip="Change Git Repository folder for this Solution / Database"
                                 Style="{StaticResource JbToolbarButtonStyle}"
                                 Margin="4,0,0,0"
@@ -128,14 +164,30 @@
                     </DockPanel>
                 </Border>
 
-                <!-- Commit History ListBox -->
                 <ListBox x:Name="CommitListBox"
                          Grid.Row="1"
-                         Background="#FFFFFF"
+                         Background="Transparent"
                          BorderThickness="0"
                          ItemContainerStyle="{StaticResource JbCommitItemStyle}"
                          SelectionChanged="OnCommitSelectionChanged"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Compare with Local Editor (Side-by-Side Merge)..."
+                                  FontWeight="SemiBold"
+                                  Click="OnCompareWithLocalEditorClick"/>
+                                            <Separator/>
+                                            <MenuItem Header="Copy Commit Revision SQL"
+                                  Click="OnCopyRevisionSqlClick"/>
+                                            <MenuItem Header="Restore Full Revision to Active Editor..."
+                                  Click="OnRestoreToEditorClick"/>
+                                            <Separator/>
+                                            <MenuItem Header="Copy Commit SHA"
+                                  Click="OnContextCopyShaClick"/>
+                                            <MenuItem Header="Copy Commit Message"
+                                  Click="OnContextCopySubjectClick"/>
+                        </ContextMenu>
+                    </ListBox.ContextMenu>
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <Grid>
@@ -144,17 +196,14 @@
                                     <ColumnDefinition Width="125"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
-
                                 <TextBlock Grid.Column="0"
                                            Text="{Binding Author}"
                                            TextTrimming="CharacterEllipsis"
                                            Margin="0,0,8,0"/>
-
                                 <TextBlock Grid.Column="1"
                                            Text="{Binding DisplayDate}"
-                                           Foreground="#6C707E"
+                                           Opacity="0.65"
                                            Margin="0,0,8,0"/>
-
                                 <TextBlock Grid.Column="2"
                                            Text="{Binding Subject}"
                                            TextTrimming="CharacterEllipsis"
@@ -170,19 +219,21 @@
                           Width="4"
                           HorizontalAlignment="Stretch"
                           VerticalAlignment="Stretch"
-                          Background="#DFE1E5"
+                          Background="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowBorderBrushKey}}"
                           ShowsPreview="True"/>
 
             <!-- ================= RIGHT PANE: DIFF VIEWER ================= -->
-            <Grid Grid.Column="2" Background="#FFFFFF">
+            <Grid Grid.Column="2" Background="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowBackgroundBrushKey}}">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="32"/>
                     <RowDefinition Height="44"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
-                <!-- Right Toolbar: Prev/Next, Copy/Restore, Diff Count, Mode Buttons -->
-                <Border Grid.Row="0" Background="#F7F8FA" BorderBrush="#DFE1E5" BorderThickness="0,0,0,1" Padding="6,0">
+                <Border Grid.Row="0"
+                        Background="{DynamicResource {x:Static platformUi:EnvironmentColors.CommandBarGradientBeginBrushKey}}"
+                        BorderBrush="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowBorderBrushKey}}"
+                        BorderThickness="0,0,0,1" Padding="6,0">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
@@ -199,16 +250,19 @@
                                     ToolTip="Next Difference"
                                     Style="{StaticResource JbToolbarButtonStyle}"
                                     Click="OnNextDiffClick"/>
-
-                            <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="6,4" Background="#DFE1E5"/>
-
-                            <Button Content="📋 Copy Revision SQL"
+                            <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="6,4"
+                                       Background="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowBorderBrushKey}}"/>
+                            <Button Content="Compare with Editor"
+                                    ToolTip="Compare selected commit (Left) with your live SSMS Editor (Right) to merge individual blocks using &gt;&gt;"
+                                    Style="{StaticResource JbToolbarButtonStyle}"
+                                    Foreground="#3574F0"
+                                    Click="OnCompareWithLocalEditorClick"/>
+                            <Button Content="Copy Revision SQL"
                                     ToolTip="Copy this revision's full SQL to the clipboard"
                                     Style="{StaticResource JbToolbarButtonStyle}"
                                     Click="OnCopyRevisionSqlClick"/>
-
-                            <Button Content="⏪ Restore to Editor"
-                                    ToolTip="Replace the active SSMS editor's SQL with this revision"
+                            <Button Content="Restore All to Editor"
+                                    ToolTip="Replace the active SSMS editor's SQL with the right-hand pane"
                                     Style="{StaticResource JbToolbarButtonStyle}"
                                     Click="OnRestoreToEditorClick"/>
                         </StackPanel>
@@ -216,10 +270,9 @@
                         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                             <TextBlock x:Name="DiffCountTextBlock"
                                        Text="0 differences"
-                                       Foreground="#5A5D63"
+                                       Opacity="0.75"
                                        VerticalAlignment="Center"
                                        Margin="0,0,12,0"/>
-
                             <Button x:Name="SideBySideModeBtn"
                                     Content="◫"
                                     ToolTip="Side-by-Side Viewer"
@@ -236,44 +289,49 @@
                     </Grid>
                 </Border>
 
-                <!-- Two-Line Commit SHA + File Path Header (No Lock Icons) -->
-                <Border Grid.Row="1" Background="#F7F8FA" BorderBrush="#DFE1E5" BorderThickness="0,0,0,1" Padding="10,4">
+                <Border Grid.Row="1"
+                        Background="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowBackgroundBrushKey}}"
+                        BorderBrush="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowBorderBrushKey}}"
+                        BorderThickness="0,0,0,1" Padding="10,4">
                     <StackPanel VerticalAlignment="Center">
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
                             <TextBlock x:Name="ParentShaTextBlock"
                                        Text="--------"
-                                       Foreground="#1E1F22"
                                        FontWeight="SemiBold"
                                        FontFamily="Consolas"
                                        Margin="0,0,10,0"/>
                             <TextBlock x:Name="HeaderFilePathTextBlock"
-                                       Text="Right-click inside a Stored Procedure and select Git > Show History"
-                                       Foreground="#5A5D63"
+                                       Text="Right-click inside a Stored Procedure and select Git -> Show History"
+                                       Opacity="0.7"
                                        TextTrimming="CharacterEllipsis"/>
                         </StackPanel>
                         <TextBlock x:Name="CurrentShaTextBlock"
                                    Text="--------"
-                                   Foreground="#1E1F22"
                                    FontWeight="SemiBold"
                                    FontFamily="Consolas"/>
                     </StackPanel>
                 </Border>
 
-                <!-- Host Container for Visual Studio IWpfDifferenceViewer -->
-                <Border x:Name="DiffViewerHost" Grid.Row="2" Background="#FFFFFF"/>
+                <Grid Grid.Row="2">
+                    <Border x:Name="DiffViewerHost"/>
+                    <Canvas x:Name="ChunkActionCanvas" IsHitTestVisible="True" ClipToBounds="True"/>
+                </Grid>
             </Grid>
         </Grid>
 
         <!-- Bottom Status / Breadcrumb Bar -->
-        <Border Grid.Row="1" Background="#F7F8FA" BorderBrush="#DFE1E5" BorderThickness="0,1,0,0" Padding="8,0">
+        <Border Grid.Row="1"
+                Background="{DynamicResource {x:Static platformUi:EnvironmentColors.CommandBarGradientBeginBrushKey}}"
+                BorderBrush="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolWindowBorderBrushKey}}"
+                BorderThickness="0,1,0,0" Padding="8,0">
             <DockPanel>
                 <TextBlock x:Name="BreadcrumbTextBlock"
                            Text="No SQL object loaded"
-                           Foreground="#5A5D63"
+                           Opacity="0.75"
                            VerticalAlignment="Center"/>
                 <TextBlock x:Name="EncodingStatusTextBlock"
                            Text="CRLF   UTF-8   4 spaces"
-                           Foreground="#5A5D63"
+                           Opacity="0.75"
                            HorizontalAlignment="Right"
                            VerticalAlignment="Center"/>
             </DockPanel>

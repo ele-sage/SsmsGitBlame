@@ -10,10 +10,10 @@ namespace SsmsGitBlame
     {
         public const string Id = "SsmsGitBlame.9e4a2a3f-1ad4-4bda-9165-c0f636a5f398";
         public const string Name = "SsmsGitBlame";
-        public const string Description = @"JetBrains-style Git Show History tool window, Selection History, and inline Git Blame annotations for SSMS 22 Stored Procedures.";
+        public const string Description = @"Git Show History tool window, Selection History, and inline Git Blame annotations for SSMS 22 Stored Procedures.";
         public const string Language = "en-US";
         public const string Version = "1.0.0";
-        public const string Author = "EmileLeSage";
+        public const string Author = "Emile Le Sage";
         public const string Tags = "";
         public const bool IsPreview = false;
     }

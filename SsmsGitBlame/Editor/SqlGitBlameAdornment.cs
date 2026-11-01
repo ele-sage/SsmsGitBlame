@@ -1,4 +1,5 @@
-﻿using Microsoft.VisualStudio.Shell;
+﻿using Community.VisualStudio.Toolkit;
+using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Text;
 using Microsoft.VisualStudio.Text.Editor;
 using Microsoft.VisualStudio.Text.Formatting;
@@ -43,6 +44,8 @@ namespace SsmsGitBlame
         private readonly IAdornmentLayer _layer;
         private readonly GitBlameService _blameService;
         private readonly DispatcherTimer _debounceTimer;
+        private readonly Stack<BlameTagControl> _controlPool = new Stack<BlameTagControl>(64);
+        private readonly AdornmentRemovedCallback _onAdornmentRemovedCallback;
 
         private Dictionary<int, LineBlameViewModel> _lineBlameCache = new Dictionary<int, LineBlameViewModel>();
         private CancellationTokenSource _cts;
@@ -60,6 +63,7 @@ namespace SsmsGitBlame
             _view = view;
             _layer = view.GetAdornmentLayer("SsmsGitBlameLayer");
             _blameService = new GitBlameService();
+            _onAdornmentRemovedCallback = OnAdornmentRemoved;
 
             _debounceTimer = new DispatcherTimer(DispatcherPriority.ApplicationIdle)
             {
@@ -73,11 +77,29 @@ namespace SsmsGitBlame
             _view.Closed += OnViewClosed;
 
             _lastFocusedManager = this;
+            GeneralOptions.Saved += OnOptionsSaved;
+
+            if (GeneralOptions.Instance.EnableBlameByDefault)
+            {
+                _isBlameEnabled = true;
+                _debounceTimer.Start();
+            }
+        }
+
+        private void OnOptionsSaved(GeneralOptions options)
+        {
+            if (_isBlameEnabled && !_view.IsClosed)
+            {
+                _debounceTimer.Stop();
+                OnDebounceTick(this, EventArgs.Empty);
+            }
         }
 
         private void OnViewGotFocus(object sender, EventArgs e)
         {
             _lastFocusedManager = this;
+            SsmsObjectOpenerService.CaptureActiveConnection();
+            GitCompareMergeToolWindow.TrackActiveSqlBuffer(_view.TextBuffer);
         }
 
         public void ToggleBlame()
@@ -92,7 +114,7 @@ namespace SsmsGitBlame
             else
             {
                 _debounceTimer.Stop();
-                _cts?.Cancel();
+                CancelAndResetCts();
                 _lineBlameCache.Clear();
                 _layer.RemoveAllAdornments();
             }
@@ -110,10 +132,9 @@ namespace SsmsGitBlame
             _debounceTimer.Stop();
             if (_view.IsClosed || !_isBlameEnabled) return;
 
-            _cts?.Cancel();
-            _cts?.Dispose();
+            CancelAndResetCts();
             _cts = new CancellationTokenSource();
-            var token = _cts.Token;
+            CancellationToken token = _cts.Token;
 
             ITextSnapshot snapshot = _view.TextSnapshot;
             if (snapshot.Length <= 20) return;
@@ -122,14 +143,18 @@ namespace SsmsGitBlame
 
             ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
             {
-                var newCache = await Task.Run(() => _blameService.LoadGitBlameForSqlAsync(sqlText, token), token);
-
-                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-                if (!token.IsCancellationRequested && !_view.IsClosed && _isBlameEnabled && newCache != null)
+                try
                 {
-                    _lineBlameCache = newCache;
-                    RenderAllVisibleLines();
+                    var newCache = await Task.Run(() => _blameService.LoadGitBlameForSqlAsync(sqlText, token), token);
+
+                    await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                    if (!token.IsCancellationRequested && !_view.IsClosed && _isBlameEnabled && newCache != null)
+                    {
+                        _lineBlameCache = newCache;
+                        RenderAllVisibleLines();
+                    }
                 }
+                catch (OperationCanceledException) { }
             }).FileAndForget(nameof(OnDebounceTick));
         }
 
@@ -160,7 +185,6 @@ namespace SsmsGitBlame
         private void CreateAdornmentForLine(IWpfTextViewLine line)
         {
             int zeroBasedLine = _view.TextSnapshot.GetLineNumberFromPosition(line.Start);
-
             if (_lineBlameCache.TryGetValue(zeroBasedLine, out LineBlameViewModel vm))
             {
                 _layer.RemoveAdornmentsByVisualSpan(line.Extent);
@@ -168,22 +192,50 @@ namespace SsmsGitBlame
                 vm.EditorFontFamily = _view.FormattedLineSource.DefaultTextProperties.Typeface.FontFamily;
                 vm.EditorFontSize = _view.FormattedLineSource.DefaultTextProperties.FontRenderingEmSize * 0.88;
 
-                var control = new BlameTagControl
-                {
-                    DataContext = vm
-                };
-                control.TagClicked += (s, clickedVm) => OnBlameTagClicked(clickedVm);
+                BlameTagControl control = RentControl(vm);
 
                 Canvas.SetLeft(control, line.Right + 24);
                 Canvas.SetTop(control, line.Top);
 
-                _layer.AddAdornment(AdornmentPositioningBehavior.TextRelative, line.Extent, null, control, null);
+                _layer.AddAdornment(
+                    AdornmentPositioningBehavior.TextRelative,
+                    line.Extent,
+                    vm,
+                    control,
+                    _onAdornmentRemovedCallback);
             }
         }
 
-        // Clicking an inline blame tag opens the bottom Git History Tool Window directly to that commit & line!
-        private void OnBlameTagClicked(LineBlameViewModel vm)
+        private BlameTagControl RentControl(LineBlameViewModel vm)
         {
+            BlameTagControl control;
+            if (_controlPool.Count > 0)
+            {
+                control = _controlPool.Pop();
+            }
+            else
+            {
+                control = new BlameTagControl();
+                control.TagClicked += OnTagControlClicked;
+            }
+
+            control.DataContext = vm;
+            return control;
+        }
+
+        private void OnAdornmentRemoved(object tag, System.Windows.UIElement element)
+        {
+            if (element is BlameTagControl control && !_view.IsClosed && _controlPool.Count < 128)
+            {
+                control.DataContext = null;
+                _controlPool.Push(control);
+            }
+        }
+
+        private void OnTagControlClicked(object sender, LineBlameViewModel clickedVm)
+        {
+            if (clickedVm == null) return;
+
             ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
             {
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
@@ -192,9 +244,19 @@ namespace SsmsGitBlame
                 string sqlText = _view.TextSnapshot.GetText();
                 await GitHistoryToolWindow.ShowForSqlTextAsync(
                     sqlText: sqlText,
-                    targetCommitSha: vm.CommitSha,
-                    targetGitLineNumber: vm.GitLineNumber);
-            }).FileAndForget(nameof(OnBlameTagClicked));
+                    targetCommitSha: clickedVm.CommitSha,
+                    targetGitLineNumber: clickedVm.GitLineNumber);
+            }).FileAndForget(nameof(OnTagControlClicked));
+        }
+
+        private void CancelAndResetCts()
+        {
+            var cts = Interlocked.Exchange(ref _cts, null);
+            if (cts != null)
+            {
+                try { cts.Cancel(); } catch (ObjectDisposedException) { }
+                cts.Dispose();
+            }
         }
 
         private void OnViewClosed(object sender, EventArgs e)
@@ -203,14 +265,22 @@ namespace SsmsGitBlame
             {
                 _lastFocusedManager = null;
             }
+
             _debounceTimer.Stop();
             _debounceTimer.Tick -= OnDebounceTick;
             _view.GotAggregateFocus -= OnViewGotFocus;
             _view.TextBuffer.Changed -= OnTextBufferChanged;
             _view.LayoutChanged -= OnLayoutChanged;
             _view.Closed -= OnViewClosed;
-            _cts?.Cancel();
-            _cts?.Dispose();
+            GeneralOptions.Saved -= OnOptionsSaved;
+
+            while (_controlPool.Count > 0)
+            {
+                BlameTagControl ctrl = _controlPool.Pop();
+                ctrl.TagClicked -= OnTagControlClicked;
+            }
+
+            CancelAndResetCts();
         }
     }
 }

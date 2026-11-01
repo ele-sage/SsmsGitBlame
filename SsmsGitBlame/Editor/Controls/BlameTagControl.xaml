@@ -8,16 +8,36 @@
     <Border Padding="6,1,6,1" 
             CornerRadius="3"
             MouseLeftButtonDown="OnBorderMouseLeftButtonDown">
+        <Border.ToolTip>
+            <ToolTip xmlns:platformUi="clr-namespace:Microsoft.VisualStudio.PlatformUI;assembly=Microsoft.VisualStudio.Shell.15.0"
+             Background="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolTipBrushKey}}"
+             BorderBrush="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolTipBorderBrushKey}}"
+             Foreground="{DynamicResource {x:Static platformUi:EnvironmentColors.ToolTipTextBrushKey}}"
+             Padding="10,8">
+                <StackPanel MaxWidth="420">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <TextBlock Text="{Binding Author}" FontWeight="SemiBold" Margin="0,0,10,0"/>
+                        <TextBlock Text="{Binding Date}" Opacity="0.7"/>
+                    </StackPanel>
+                    <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding CommitSha}" FontFamily="Consolas" FontSize="11" Foreground="#3574F0" Margin="0,0,12,0"/>
+                        <TextBlock Text="(Click to view diff in Git History)" FontSize="11" FontStyle="Italic" Opacity="0.7"/>
+                    </StackPanel>
+                </StackPanel>
+            </ToolTip>
+        </Border.ToolTip>
         <Border.Style>
             <Style TargetType="Border">
                 <Setter Property="Background" Value="Transparent" />
                 <Style.Triggers>
                     <Trigger Property="IsMouseOver" Value="True">
-                        <Setter Property="Background" Value="#2D2D30" />
+                        <Setter Property="Background" Value="#1F3574F0" />
                     </Trigger>
                 </Style.Triggers>
             </Style>
         </Border.Style>
+
         <TextBlock Text="{Binding DisplayText}"
                    FontFamily="{Binding EditorFontFamily}"
                    FontSize="{Binding EditorFontSize}"
@@ -27,7 +47,7 @@
                     <Setter Property="Foreground" Value="#8C8C8C" />
                     <Style.Triggers>
                         <DataTrigger Binding="{Binding IsUncommitted}" Value="True">
-                            <Setter Property="Foreground" Value="#64A0D2" />
+                            <Setter Property="Foreground" Value="#3574F0" />
                         </DataTrigger>
                         <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=Border}, Path=IsMouseOver}" Value="True">
                             <Setter Property="TextDecorations" Value="Underline" />

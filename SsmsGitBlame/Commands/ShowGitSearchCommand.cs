@@ -12,6 +12,9 @@ namespace SsmsGitBlame
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
+            // Capture active SQL editor connection while the editor still has focus!
+            SsmsObjectOpenerService.CaptureActiveConnection();
+
             string query = null;
             DocumentView docView = await VS.Documents.GetActiveDocumentViewAsync();
             if (docView?.TextView != null && !docView.TextView.Selection.IsEmpty)
